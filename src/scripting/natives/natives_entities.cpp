@@ -40,15 +40,33 @@ namespace counterstrikesharp {
 static bool EnsureEntitySystem()
 {
     if (globals::entitySystem != nullptr) return true;
-    if (interfaces::pGameResourceServiceServer == nullptr) return false;
-    globals::entitySystem = interfaces::pGameResourceServiceServer->GetGameEntitySystem();
-    if (globals::entitySystem == nullptr) return false;
+    static bool s_diagLogged = false;
+    if (interfaces::pGameResourceServiceServer == nullptr)
+    {
+        if (!s_diagLogged)
+        {
+            CSSHARP_CORE_ERROR("EnsureEntitySystem: pGameResourceServiceServer is NULL");
+            s_diagLogged = true;
+        }
+        return false;
+    }
+    CGameEntitySystem* resolved = interfaces::pGameResourceServiceServer->GetGameEntitySystem();
+    if (resolved == nullptr)
+    {
+        if (!s_diagLogged)
+        {
+            CSSHARP_CORE_ERROR("EnsureEntitySystem: GetGameEntitySystem() returned NULL (pGameResourceServiceServer=%p)", (void*)interfaces::pGameResourceServiceServer);
+            s_diagLogged = true;
+        }
+        return false;
+    }
+    globals::entitySystem = resolved;
     static bool s_listenerRegistered = false;
     if (!s_listenerRegistered)
     {
         globals::entitySystem->AddListenerEntity(&globals::entityManager.entityListener);
         s_listenerRegistered = true;
-        CSSHARP_CORE_INFO("EntitySystem resolved lazily (FEX-Emu trampoline workaround)");
+        CSSHARP_CORE_INFO("EntitySystem resolved lazily (FEX-Emu trampoline workaround), entitySystem=%p", (void*)globals::entitySystem);
     }
     return true;
 }
