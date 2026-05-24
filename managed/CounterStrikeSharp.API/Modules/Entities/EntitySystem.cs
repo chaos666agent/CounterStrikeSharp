@@ -7,7 +7,12 @@ namespace CounterStrikeSharp.API.Modules.Entities;
 
 public static class EntitySystem
 {
-    private static Lazy<IntPtr> ConcreteEntityListPointer = new(NativeAPI.GetConcreteEntityListPointer);
+    // PublicationOnly: does NOT cache exceptions, so we retry the native call until it
+    // succeeds. Needed for FEX-Emu where the native ConcreteEntityListPointer may
+    // briefly return null before the engine has populated CGameResourceService->
+    // m_pGameEntitySystem; without this every entity API call after the first
+    // failure throws a cached exception forever.
+    private static Lazy<IntPtr> ConcreteEntityListPointer = new(NativeAPI.GetConcreteEntityListPointer, System.Threading.LazyThreadSafetyMode.PublicationOnly);
 
     private const int MaxEntities = 32768;
     private const int MaxEntitiesPerChunk = 512;

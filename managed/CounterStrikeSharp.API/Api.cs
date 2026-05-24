@@ -11,7 +11,12 @@ public class Api
     /// <returns></returns>
     public static int GetVersion()
     {
-        return Assembly.GetAssembly(typeof(BasePlugin))!.GetName().Version!.Build;
+        // This build is forked from upstream v1.0.368 with FEX-Emu patches.
+        // GitVersion on PR builds reports Build=1 which would block any plugin
+        // declaring [MinimumApiVersion(N>=2)]. Report the upstream base version
+        // so existing plugins (RetakesPlugin=345, RetakesAllocator=201, etc.) load.
+        var build = Assembly.GetAssembly(typeof(BasePlugin))!.GetName().Version!.Build;
+        return build > 368 ? build : 368;
     }
     
     /// <summary>
