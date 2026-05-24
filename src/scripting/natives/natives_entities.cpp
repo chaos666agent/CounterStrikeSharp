@@ -40,23 +40,33 @@ namespace counterstrikesharp {
 static bool EnsureEntitySystem()
 {
     if (globals::entitySystem != nullptr) return true;
-    static bool s_diagLogged = false;
+    static int s_attemptsLogged = 0;
     if (interfaces::pGameResourceServiceServer == nullptr)
     {
-        if (!s_diagLogged)
+        if (s_attemptsLogged < 3)
         {
-            CSSHARP_CORE_ERROR("EnsureEntitySystem: pGameResourceServiceServer is NULL");
-            s_diagLogged = true;
+            CSSHARP_CORE_ERROR("EnsureEntitySystem: pGameResourceServiceServer is NULL (attempt {})", s_attemptsLogged);
+            s_attemptsLogged++;
         }
         return false;
     }
     CGameEntitySystem* resolved = interfaces::pGameResourceServiceServer->GetGameEntitySystem();
     if (resolved == nullptr)
     {
-        if (!s_diagLogged)
+        if (s_attemptsLogged < 5)
         {
-            CSSHARP_CORE_ERROR("EnsureEntitySystem: GetGameEntitySystem() returned NULL (pGameResourceServiceServer=%p)", (void*)interfaces::pGameResourceServiceServer);
-            s_diagLogged = true;
+            uintptr_t base = (uintptr_t)interfaces::pGameResourceServiceServer;
+            int offset = (int)counterstrikesharp::globals::gameConfig->GetOffset("GameEntitySystem");
+            uintptr_t* p = (uintptr_t*)(base + offset);
+            CSSHARP_CORE_ERROR("EnsureEntitySystem: GetGameEntitySystem() NULL. base={:p} offset={} member_at_offset={:p}", (void*)base, offset, (void*)*p);
+            // Memory dump around the expected offset
+            char dumpbuf[256];
+            int n = 0;
+            for (int i = -16; i < 32 && n + 32 < (int)sizeof(dumpbuf); i += 8) {
+                n += snprintf(dumpbuf + n, sizeof(dumpbuf) - n, "+%d=%p ", offset + i, (void*)*(uintptr_t*)(base + offset + i));
+            }
+            CSSHARP_CORE_ERROR("EnsureEntitySystem: memdump {}", dumpbuf);
+            s_attemptsLogged++;
         }
         return false;
     }
@@ -66,7 +76,7 @@ static bool EnsureEntitySystem()
     {
         globals::entitySystem->AddListenerEntity(&globals::entityManager.entityListener);
         s_listenerRegistered = true;
-        CSSHARP_CORE_INFO("EntitySystem resolved lazily (FEX-Emu trampoline workaround), entitySystem=%p", (void*)globals::entitySystem);
+        CSSHARP_CORE_INFO("EntitySystem resolved lazily (FEX-Emu trampoline workaround), entitySystem={:p}", (void*)globals::entitySystem);
     }
     return true;
 }
