@@ -24,11 +24,34 @@
 #include "core/managers/player_manager.h"
 #include "core/memory.h"
 #include "core/recipientfilters.h"
+#include "core/cs2_sdk/interfaces/cs2_interfaces.h"
 #include "entitykeyvalues.h"
 #include "scripting/autonative.h"
 #include "scripting/script_engine.h"
 
 namespace counterstrikesharp {
+
+// FEX-Emu workaround: Hook_StartupServer's SourceHook trampoline does not always
+// fire under x86_64->ARM64 translation, leaving globals::entitySystem null even
+// though the CS2 engine's entity system is fully initialized. Lazily resolve it
+// from the still-valid GameResourceService pointer the first time any entity
+// native is called, and register the entity listener that Hook_StartupServer
+// would have registered.
+static bool EnsureEntitySystem()
+{
+    if (globals::entitySystem != nullptr) return true;
+    if (interfaces::pGameResourceServiceServer == nullptr) return false;
+    globals::entitySystem = interfaces::pGameResourceServiceServer->GetGameEntitySystem();
+    if (globals::entitySystem == nullptr) return false;
+    static bool s_listenerRegistered = false;
+    if (!s_listenerRegistered)
+    {
+        globals::entitySystem->AddListenerEntity(&globals::entityManager.entityListener);
+        s_listenerRegistered = true;
+        CSSHARP_CORE_INFO("EntitySystem resolved lazily (FEX-Emu trampoline workaround)");
+    }
+    return true;
+}
 
 enum KeyValuesType_t : uint8_t
 {
@@ -54,7 +77,7 @@ enum KeyValuesType_t : uint8_t
 
 CEntityInstance* GetEntityFromIndex(ScriptContext& script_context)
 {
-    if (!globals::entitySystem)
+    if (!EnsureEntitySystem())
     {
         script_context.ThrowNativeError("Entity system is not yet initialized");
         return nullptr;
@@ -81,7 +104,7 @@ const char* GetDesignerName(ScriptContext& scriptContext)
 
 void* GetEntityPointerFromHandle(ScriptContext& scriptContext)
 {
-    if (!globals::entitySystem)
+    if (!EnsureEntitySystem())
     {
         scriptContext.ThrowNativeError("Entity system is not yet initialized");
         return nullptr;
@@ -393,7 +416,7 @@ void EntityKeyValuesGetValue(ScriptContext& script_context)
 
 void* GetEntityPointerFromRef(ScriptContext& scriptContext)
 {
-    if (!globals::entitySystem)
+    if (!EnsureEntitySystem())
     {
         scriptContext.ThrowNativeError("Entity system yet is not initialized");
         return nullptr;
@@ -432,7 +455,7 @@ unsigned int GetRefFromEntityPointer(ScriptContext& scriptContext)
 
 bool IsRefValidEntity(ScriptContext& scriptContext)
 {
-    if (!globals::entitySystem)
+    if (!EnsureEntitySystem())
     {
         scriptContext.ThrowNativeError("Entity system yet is not initialized");
         return false;
@@ -465,7 +488,7 @@ void PrintToConsole(ScriptContext& scriptContext)
 
 CEntityIdentity* GetFirstActiveEntity(ScriptContext& script_context)
 {
-    if (!globals::entitySystem)
+    if (!EnsureEntitySystem())
     {
         script_context.ThrowNativeError("Entity system yet is not initialized");
         return nullptr;
@@ -476,7 +499,7 @@ CEntityIdentity* GetFirstActiveEntity(ScriptContext& script_context)
 
 void* GetConcreteEntityListPointer(ScriptContext& script_context)
 {
-    if (!globals::entitySystem)
+    if (!EnsureEntitySystem())
     {
         script_context.ThrowNativeError("Entity system yet is not initialized");
         return nullptr;
